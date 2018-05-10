@@ -73,7 +73,6 @@ public class FeatureList {
 
         if (writingJavaVersion) {
             // When we add Java 9 we need to add it here and update the 1.6 and 1.7 and 1.8 filters. Need to ensure this is captured in docs.
-            addJVM(possibleJavaVersions, "1.6", "1.5", "1.4", "1.3", "1.2", "1.1");
             addJVM(possibleJavaVersions, "1.7", "1.6", "1.5", "1.4", "1.3", "1.2", "1.1");
             addJVM(possibleJavaVersions, "1.8", "1.7", "1.6", "1.5", "1.4", "1.3", "1.2", "1.1");
 
@@ -91,7 +90,7 @@ public class FeatureList {
 
     /**
      * Constructor.
-     * 
+     *
      * @param options The list of command line options.
      * @param fds The list of features associated with a particular product.
      * @param coreFDs The list of features associated with the core product, or null if
@@ -405,12 +404,23 @@ public class FeatureList {
             for (FeatureResource res : fd.getConstituents(SubsystemContentType.FEATURE_TYPE)) {
                 ProvisioningFeatureDefinition otherFD = mfp.getFeatureDefinitions().get(res.getSymbolicName());
                 // This will NPE when we call getJavaVersion, so fail more helpfully
-                if (otherFD == null)
-                {
-                    throw new RuntimeException("Could not find a feature definition for " + res.getSymbolicName());
+                if (otherFD == null) {
+                  String symbolicNameStart = res.getSymbolicName();
+                  int index = symbolicNameStart.lastIndexOf('-');
+                  if (index != -1) {
+                    symbolicNameStart = symbolicNameStart.substring(0, index + 1);
+                    for (String version : res.getTolerates()) {
+                      otherFD = mfp.getFeatureDefinitions().get(symbolicNameStart + version);
+                      if (otherFD != null) {
+                        break;
+                      }
+                    }
+                  }
                 }
-                List<Map<String, Object>> featureSupportedVersion = getJavaVersion(mfp, otherFD);
-                result.retainAll(featureSupportedVersion);
+                if (otherFD != null) {
+                  List<Map<String, Object>> featureSupportedVersion = getJavaVersion(mfp, otherFD);
+                  result.retainAll(featureSupportedVersion);
+                }
             }
 
             cachedJavaVersionsByFeature.put(fd.getFeatureName(), result);
