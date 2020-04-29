@@ -11,9 +11,11 @@
 package com.ibm.ws.webcontainer.osgi.container;
 
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.ibm.websphere.ras.Tr;
 import com.ibm.websphere.ras.TraceComponent;
+import com.ibm.ws.threading.listeners.CompletionListener;
 import com.ibm.ws.webcontainer.VirtualHost;
 import com.ibm.ws.webcontainer.osgi.osgi.WebContainerConstants;
 import com.ibm.ws.webcontainer.osgi.webapp.WebApp;
@@ -39,6 +41,8 @@ public class DeployedModule extends com.ibm.ws.container.DeployedModule
   private WebApp webApp;
   private WebAppConfiguration webAppConfig;
   private Future<Boolean> contextRootAdded;
+  private AtomicInteger initTaskCount = new AtomicInteger(2);
+  private CompletionListener<Boolean> initTasksDoneListener;
   private String properContextRoot;
   private String mappingContextRoot;
   
@@ -88,14 +92,22 @@ public class DeployedModule extends com.ibm.ws.container.DeployedModule
     return this.getWebAppConfig().getContextRoot();
   }
 
-  public void setContextRootAdded(Future<Boolean> contextRootAdded)
+  public void addStartupListener(Future<Boolean> contextRootAdded, CompletionListener<Boolean> listener)
   {
     this.contextRootAdded = contextRootAdded;
+    this.initTasksDoneListener = listener;
   }
 
-  public Future<Boolean> getContextRootAdded()
-  {
-    return this.contextRootAdded;
+  public void initTaskComplete() {
+    if (initTaskCount.decrementAndGet() == 0 && initTasksDoneListener != null) {
+      initTasksDoneListener.successfulCompletion(contextRootAdded, true);
+    }
+  }
+
+  public void initTaskFailed() {
+    if (initTasksDoneListener != null) {
+      initTasksDoneListener.successfulCompletion(contextRootAdded, false);
+    }
   }
 
   public String getProperContextRoot()

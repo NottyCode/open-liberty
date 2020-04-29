@@ -61,6 +61,7 @@ import com.ibm.ws.javaee.version.ServletVersion;
 import com.ibm.ws.managedobject.ManagedObjectService;
 import com.ibm.ws.runtime.metadata.ModuleMetaData;
 import com.ibm.ws.threading.FutureMonitor;
+import com.ibm.ws.threading.listeners.CompletionListener;
 import com.ibm.ws.webcontainer.SessionRegistry;
 import com.ibm.ws.webcontainer.async.AsyncContextFactory;
 import com.ibm.ws.webcontainer.collaborator.CollaboratorService;
@@ -674,21 +675,32 @@ public class WebContainer extends com.ibm.ws.webcontainer.WebContainer implement
         String methodName ="addContextRootRequirement";
         String contextRoot = deployedModule.getMappingContextRoot();
         synchronized (contextRoots) {
+            Future<Boolean> future = futureMonitor.createFuture(Boolean.class);
+            deployedModule.addStartupListener(future, new CompletionListener<Boolean>() {
+                @Override
+                public void failedCompletion(Future<Boolean> arg0, Throwable arg1) {
+                }
+
+                @Override
+                public void successfulCompletion(Future<Boolean> arg0, Boolean arg1) {
+                    futureMonitor.setResult(arg0, arg1);
+                }
+            });
             if (contextRoots.contains(contextRoot)) {
                 if (TraceComponent.isAnyTracingEnabled() && tc.isDebugEnabled()) {
                     Tr.debug(tc, methodName, "contextRoot-> ["+ contextRoot+"] already added , set future done for deployedModule -->" + deployedModule);
                 }
-                return futureMonitor.createFutureWithResult(true);
-            }
-            Set<DeployedModule> pending = pendingContextRoots.get(contextRoot);
-            if (pending == null) {
-                pending = new LinkedHashSet<DeployedModule>();
-                pendingContextRoots.put(contextRoot, pending);
-            }
+                deployedModule.initTaskComplete();
+            } else {
+                Set<DeployedModule> pending = pendingContextRoots.get(contextRoot);
+                if (pending == null) {
+                    pending = new LinkedHashSet<DeployedModule>();
+                    pendingContextRoots.put(contextRoot, pending);
+                }
 
-            Future<Boolean> future = futureMonitor.createFuture(Boolean.class);
-            deployedModule.setContextRootAdded(future);
-            pending.add(deployedModule);
+                pending.add(deployedModule);
+            }
+            
             if (TraceComponent.isAnyTracingEnabled() && tc.isDebugEnabled()) {
                 Tr.debug(tc, methodName, "contextRoot-> ["+ contextRoot+"] not added , in pending future "+future+" for deployedModule -->" + deployedModule);
             }
@@ -721,7 +733,7 @@ public class WebContainer extends com.ibm.ws.webcontainer.WebContainer implement
             Set<DeployedModule> pending = pendingContextRoots.remove(contextRoot);
             if (pending != null) {
                 for (DeployedModule deployedModule : pending) {
-                    futureMonitor.setResult(deployedModule.getContextRootAdded(), true);
+                    deployedModule.initTaskComplete();
                 }
             }
         }
@@ -940,6 +952,7 @@ public class WebContainer extends com.ibm.ws.webcontainer.WebContainer implement
                 this.deployedModuleMap.put(webModule, dMod);
                 addWebApplication(dMod);
             
+                result =  addContextRootRequirement(dMod);
                 // If the Webcontainer attribute "deferServletLoad" is set to "false" (not the default)
                 // then start the web application now, inline on this thread
                 // otherwise, launch is on its own thread
@@ -964,7 +977,6 @@ public class WebContainer extends com.ibm.ws.webcontainer.WebContainer implement
                     });
                 }
                 registerMBeans((WebModuleMetaDataImpl) wmmd, webModuleContainer);
-                result =  addContextRootRequirement(dMod);
             }
         } catch (Throwable e) {
             FFDCWrapper.processException(e, getClass().getName(), "startModule", new Object[] { webModule, this });

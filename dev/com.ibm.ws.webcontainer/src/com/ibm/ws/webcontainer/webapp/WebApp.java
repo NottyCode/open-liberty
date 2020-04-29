@@ -1041,9 +1041,17 @@ public abstract class WebApp extends BaseContainer implements ServletContext, IS
                 if (WCCustomProperties.STOP_APP_STARTUP_ON_LISTENER_EXCEPTION) {          //PI58875
                     if (com.ibm.ejs.ras.TraceComponent.isAnyTracingEnabled() && logger.isLoggable(Level.FINE))
                         logger.logp(Level.FINE, CLASS_NAME, "initialize", "rethrowing exception due to stopAppStartupOnListenerException");
+                    if (moduleConfig instanceof com.ibm.ws.webcontainer.osgi.container.DeployedModule) {
+                        ((com.ibm.ws.webcontainer.osgi.container.DeployedModule)moduleConfig).initTaskFailed();
+                    }
                     throw th;
                 }
             }
+
+            if (moduleConfig instanceof com.ibm.ws.webcontainer.osgi.container.DeployedModule) {
+                ((com.ibm.ws.webcontainer.osgi.container.DeployedModule)moduleConfig).initTaskComplete();
+            }
+
             commonInitializationFinally(extensionFactories); // NEVER INVOKED BY
             // WEBSPHERE
             // APPLICATION
